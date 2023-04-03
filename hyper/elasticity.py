@@ -191,3 +191,74 @@ class NeoHookeanElasticity(Elasticity):
         M = lamda * invCC + 2 * (lamda * lnJ - mu) * dinvC
 
         return M
+    
+class GentElasticity(Elasticity):
+
+    def __init__(self, E, nu):
+        # self.VERBOSE = True
+        super(GentElasticity, self).__init__(E, nu)
+
+    def potential(self, C):
+        """
+        Compute hyperelastic potential: phi = mu/2 * (tr(C)-3) - mu*ln(J) + lamda/2 *ln(J)^2
+        """
+        lamda = self.get1LAME()
+        mu = self.get2LAME()
+        dim = len(C)
+        if dim == 2:
+            K = np.copy(C)
+            C = np.zeros((3, 3))
+            C[:2, :2] = K[:, :]
+        J = np.sqrt(tensor.det(C))  # J = det(F) and det(C) = J^2
+        part1 = (mu / 2) * (tensor.trace(C) - 3.)
+        part2 = mu * np.log(J)
+        part3 = (lamda / 2) * (np.log(J))**2
+        phi = part1 - part2 + part3
+        return phi
+
+    def stress(self, C):
+        """
+        Compute 2nd Piola-Kirchhoff stress
+        """
+
+        dim = len(C)
+        if dim == 2:
+            K = np.copy(C)
+            C = np.eye(3)
+            C[:2, :2] = K[:, :]
+        PK2 = tensor.tensor(dim)
+        detC = tensor.det(C)
+        detF = np.sqrt(detC)
+        lnJ = np.log(detF)
+        lamda = self.get1LAME()
+        mu = self.get2LAME()
+        invC = tensor.inv(C)
+        I = tensor.I(3)
+        PK2 = mu * (I - invC) + lamda * lnJ * invC
+        if dim == 2:
+            return PK2[:2, :2]
+        return PK2
+
+    def stiffness(self, C):
+        """
+        Compute material tangent M = 2*dS/dC
+        """
+        d = len(C)
+        lnJ = np.log(np.sqrt(tensor.det(C)))
+        lamda = self.get1LAME()
+        mu = self.get2LAME()
+        invC = tensor.inv(C)
+        invCC = tensor.outerProd4(invC, invC)
+        terme1 = lamda * invCC
+        dinvC = tensor.tensor4(d)
+        for i in range(d):
+            for j in range(d):
+                for k in range(d):
+                    for l in range(d):
+                        part1 = invC[i, k] * invC[j, l]
+                        part2 = invC[i, l] * invC[j, k]
+                        dinvC[i, j, k, l] = -(part1 + part2) / 2
+
+        M = lamda * invCC + 2 * (lamda * lnJ - mu) * dinvC
+
+        return M
