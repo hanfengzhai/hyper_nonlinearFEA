@@ -231,7 +231,7 @@ class GentElasticity(Elasticity):
         mu = self.get2LAME()
         invC = tensor.inv(C)
         I = tensor.I(3)
-        PK2 = mu * (I - invC) + lamda * lnJ * invC
+        PK2 = - mu * ((jm)/(jm - tensor.trace(C) + 3)) * I
         if dim == 2:
             return PK2[:2, :2]
         return PK2
@@ -256,6 +256,8 @@ class GentElasticity(Elasticity):
                         part2 = invC[i, l] * invC[j, k]
                         dinvC[i, j, k, l] = -(part1 + part2) / 2
 
-        M = lamda * invCC + 2 * (lamda * lnJ - mu) * dinvC
+        I = tensor.I(dim)
+        IxI = tensor.outerProd4(I, I)
+        M = ( (-mu*jm) / (jm - tensor.trace(C) + 3)**2 ) * IxI     
 
         return M
