@@ -5,7 +5,7 @@ from hyper import tensor
 import numpy as np
 
 
-class Elasticity(ABC):
+class Plasticity(ABC):
     """
     Data structure for (isotropic) hyperelaticity models
     1ST_lamdaE_CONSTANT is the frist lamé parameter lambda
@@ -76,52 +76,7 @@ class Elasticity(ABC):
         return self.LAME2
 
 
-class StVenantKirchhoffElasticity(Elasticity):
-
-    def __init__(self, E, nu):
-        super(StVenantKirchhoffElasticity, self).__init__(E, nu)
-
-    def potential(self, C):
-        """
-        Compute hyperelastic potential: phi = lamdabda/2 * tr(E)^2 - mu*(E:E)
-        """
-        lamda = self.get1LAME()
-        mu = self.get2LAME()
-        EL = 0.5 * (C - tensor.I(len(C)))  # Lagrangian strain E
-        phi = lamda / 2. * (tensor.trace(EL))**2 + mu * np.tensordot(EL, EL, 2)
-        return phi
-
-    def stress(self, C):
-        """
-        Compute 2nd Piola-Kirchhoff stress
-        PK2 = 2*dphi/dC
-            = lambda * tr(E) * I + 2 * mu * E
-        """
-        dim = len(C)
-        PK2 = tensor.tensor(dim)
-        lamda = self.get1LAME()
-        mu = self.get2LAME()
-        E = tensor.tensor(dim)
-        E = 0.5 * (C - tensor.I(dim))
-        II = tensor.I(dim)
-        PK2 = lamda * tensor.trace(E) * II + 2 * mu * E
-        return PK2
-
-    def stiffness(self, C):
-        """
-        Compute material tangent M = 2*dS/dC
-        """
-        dim = len(C)
-        lamda = self.get1LAME()
-        mu = self.get2LAME()
-        I = tensor.I(dim)
-        IxI = tensor.outerProd4(I, I)
-        IIsym = tensor.IISym(dim)
-        M = lamda * IxI + 2 * mu * IIsym
-        return M
-
-
-class NeoHookeanElasticity(Elasticity):
+class ElastoPlasticity(Plasticity):
 
     def __init__(self, E, nu):
         # self.VERBOSE = True
@@ -189,75 +144,5 @@ class NeoHookeanElasticity(Elasticity):
                         dinvC[i, j, k, l] = -(part1 + part2) / 2
 
         M = lamda * invCC + 2 * (lamda * lnJ - mu) * dinvC
-
-        return M
-    
-class GentElasticity(Elasticity):
-
-    def __init__(self, E, nu):
-        # self.VERBOSE = True
-        super(GentElasticity, self).__init__(E, nu)
-
-    def potential(self, C):
-        """
-        Compute hyperelastic potential: phi = mu/2 * jm * log( (tr(C)-3) )
-        """
-        lamda = self.get1LAME()
-        mu = self.get2LAME()
-        dim = len(C)
-        if dim == 2:
-            K = np.copy(C)
-            C = np.zeros((3, 3))
-            C[:2, :2] = K[:, :]
-        J = np.sqrt(tensor.det(C))  # J = det(F) and det(C) = J^2
-        jm = 100
-        phi = (mu / 2) * jm * np.log( 1 - (((tensor.trace(C) - 3.))/(jm)) )
-        return phi
-
-    def stress(self, C):
-        """
-        Compute 2nd Piola-Kirchhoff stress
-        """
-        dim = len(C)
-        if dim == 2:
-            K = np.copy(C)
-            C = np.eye(3)
-            C[:2, :2] = K[:, :]
-        PK2 = tensor.tensor(dim)
-        detC = tensor.det(C)
-        detF = np.sqrt(detC)
-        lnJ = np.log(detF)
-        lamda = self.get1LAME()
-        mu = self.get2LAME()
-        invC = tensor.inv(C)
-        I = tensor.I(3)
-        PK2 = - mu * ((jm)/(jm - tensor.trace(C) + 3)) * I
-        if dim == 2:
-            return PK2[:2, :2]
-        return PK2
-
-    def stiffness(self, C):
-        """
-        Compute material tangent M = 2*dS/dC
-        """
-        d = len(C)
-        lnJ = np.log(np.sqrt(tensor.det(C)))
-        lamda = self.get1LAME()
-        mu = self.get2LAME()
-        invC = tensor.inv(C)
-        invCC = tensor.outerProd4(invC, invC)
-        terme1 = lamda * invCC
-        dinvC = tensor.tensor4(d)
-        for i in range(d):
-            for j in range(d):
-                for k in range(d):
-                    for l in range(d):
-                        part1 = invC[i, k] * invC[j, l]
-                        part2 = invC[i, l] * invC[j, k]
-                        dinvC[i, j, k, l] = -(part1 + part2) / 2
-
-        I = tensor.I(dim)
-        IxI = tensor.outerProd4(I, I)
-        M = ( (-mu*jm) / (jm - tensor.trace(C) + 3)**2 ) * IxI     
 
         return M
